@@ -1,0 +1,5 @@
+pipeline:
+    build: .
+    command: python pipeline.py
+    volumes:
+      - .:/app
