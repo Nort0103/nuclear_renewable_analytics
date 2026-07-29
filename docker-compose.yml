@@ -1,5 +1,20 @@
-pipeline:
+version: '3.8'
+
+services:
+  # 1. The Backend Data Pipeline
+  pipeline:
     build: .
     command: python pipeline.py
     volumes:
       - .:/app
+
+  # 2. The Frontend Streamlit Dashboard
+  dashboard:
+    build: .
+    command: streamlit run dashboard.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    depends_on:
+      - pipeline
