@@ -61,5 +61,44 @@ try:
             st.info("Waiting for data pipeline...")
 
 except sqlite3.OperationalError:
-    st.error(
-        "Database not found. Please ensure the pipeline container has run successfully.")
+   # --- ADD THIS NEW SECTION ---
+    st.markdown("---")
+    st.subheader("Advanced Metrics: EROI & Capital Costs")
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+        # EROI Comparison Chart
+        if not df_economics.empty:
+            fig_eroi = px.bar(
+                df_economics,
+                x="technology",
+                y="eroi_baseline",
+                color="technology",
+                text_auto=True,
+                title="Energy Return on Investment (EROI)",
+                color_discrete_map={
+                    "nuclear": "#e74c3c",
+                    "onshore_wind": "#3498db",
+                    "solar_pv": "#f1c40f"
+                }
+            )
+            st.plotly_chart(fig_eroi, use_container_width=True)
+
+    with col4:
+        # CAPEX Comparison Chart
+        if not df_economics.empty:
+            fig_capex = px.bar(
+                df_economics,
+                x="technology",
+                y="capex_per_mw",
+                color="technology",
+                text_auto='.2s',
+                title="Capital Expenditure (CAPEX) per MW (€)",
+                color_discrete_map={
+                    "nuclear": "#e74c3c",
+                    "onshore_wind": "#3498db",
+                    "solar_pv": "#f1c40f"
+                }
+            )
+            st.plotly_chart(fig_capex, use_container_width=True)
