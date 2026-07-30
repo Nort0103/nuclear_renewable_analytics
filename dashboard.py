@@ -60,15 +60,15 @@ try:
         else:
             st.info("Waiting for data pipeline...")
 
-except sqlite3.OperationalError:
-   # --- ADD THIS NEW SECTION ---
+    # ==========================================
+    # RESTORED: EROI & CAPEX SECTION
+    # ==========================================
     st.markdown("---")
     st.subheader("Advanced Metrics: EROI & Capital Costs")
 
     col3, col4 = st.columns(2)
 
     with col3:
-        # EROI Comparison Chart
         if not df_economics.empty:
             fig_eroi = px.bar(
                 df_economics,
@@ -86,7 +86,6 @@ except sqlite3.OperationalError:
             st.plotly_chart(fig_eroi, use_container_width=True)
 
     with col4:
-        # CAPEX Comparison Chart
         if not df_economics.empty:
             fig_capex = px.bar(
                 df_economics,
@@ -102,3 +101,56 @@ except sqlite3.OperationalError:
                 }
             )
             st.plotly_chart(fig_capex, use_container_width=True)
+
+    # ==========================================
+    # PHASE 4: DYNAMIC LCOE CALCULATION
+    # ==========================================
+    st.markdown("---")
+    st.subheader("Dynamic LCOE (Levelized Cost of Energy) Calculation")
+
+    if not df_economics.empty:
+        # Create a copy for calculations to keep the original dataframe clean
+        df_lcoe = df_economics.copy()
+
+        # Math Step 1: Total Cost per MW over lifespan (CAPEX + Lifetime OPEX)
+        df_lcoe['total_cost'] = df_lcoe['capex_per_mw'] + \
+            (df_lcoe['opex_annual_per_mw'] * df_lcoe['lifespan_years'])
+
+        # Math Step 2: Total Energy (MWh) per MW over lifespan (8760 hours/year * Capacity Factor * Lifespan)
+        df_lcoe['total_mwh'] = 1 * 8760 * \
+            df_lcoe['capacity_factor'] * df_lcoe['lifespan_years']
+
+        # Math Step 3: Final LCOE (€ / MWh)
+        df_lcoe['lcoe_per_mwh'] = df_lcoe['total_cost'] / df_lcoe['total_mwh']
+
+        # Display Results
+        col5, col6 = st.columns(2)
+
+        with col5:
+            st.markdown("**Calculated Financials**")
+            # Select specific columns to show
+            display_df = df_lcoe[['technology',
+                                  'total_cost', 'total_mwh', 'lcoe_per_mwh']]
+            st.dataframe(display_df, use_container_width=True)
+
+        with col6:
+            # Render LCOE Chart
+            fig_lcoe = px.bar(
+                df_lcoe,
+                x="technology",
+                y="lcoe_per_mwh",
+                color="technology",
+                text_auto='.2f',
+                title="Calculated LCOE (€/MWh)",
+                color_discrete_map={
+                    "nuclear": "#e74c3c",
+                    "onshore_wind": "#3498db",
+                    "solar_pv": "#f1c40f"
+                }
+            )
+            st.plotly_chart(fig_lcoe, use_container_width=True)
+
+# The exception handler is now correctly placed at the very end
+except sqlite3.OperationalError:
+    st.error(
+        "Database not found. Please ensure the pipeline container has run successfully.")
