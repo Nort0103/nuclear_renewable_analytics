@@ -7,150 +7,134 @@ import plotly.express as px
 st.set_page_config(page_title="Energy Analytics Platform",
                    page_icon="⚡", layout="wide")
 
-st.title("⚡ Energy Analytics Platform")
-st.markdown("### Nuclear vs. Renewable Energy Performance Metrics")
-st.markdown("This dashboard analyzes LCOE (Levelized Cost of Energy) and EROI (Energy Return on Investment) across different energy sources.")
+st.title("⚡ Energy Analytics Platform: Era Comparison")
+st.markdown("### 2005 (Nuclear Peak) vs. 2026 (Renewable Transition)")
+st.markdown(
+    "Comparing system-level performance, EROI, and LCOE across two distinct energy paradigms.")
 
-# 2. Database Connection
+# 2. Database Connection & Math
 
 
 @st.cache_data
 def load_data():
-    """Connects to the SQLite DB and loads data into Pandas DataFrames."""
+    """Connects to SQLite, loads data, and calculates LCOE upfront."""
     conn = sqlite3.connect("energy_platform.db")
-
-    # Fetch tables
     df_gen = pd.read_sql_query("SELECT * FROM generation_sources", conn)
     df_econ = pd.read_sql_query("SELECT * FROM economic_parameters", conn)
-
     conn.close()
+
+    # Calculate Dynamic LCOE for all data at once
+    if not df_econ.empty:
+        df_econ['total_cost'] = df_econ['capex_per_mw'] + \
+            (df_econ['opex_annual_per_mw'] * df_econ['lifespan_years'])
+        df_econ['total_mwh'] = 1 * 8760 * \
+            df_econ['capacity_factor'] * df_econ['lifespan_years']
+        df_econ['lcoe_per_mwh'] = df_econ['total_cost'] / df_econ['total_mwh']
+
     return df_gen, df_econ
 
+# --- HELPER FUNCTION FOR CLEAN CODE ---
 
-# 3. Load and Display Data
+
+def draw_era_metrics(scenario_name, df_gen, df_econ, title_prefix):
+    """Filters data by scenario and draws the three core charts."""
+    # Filter data for the specific era
+    df_g = df_gen[df_gen['scenario'] == scenario_name]
+    df_e = df_econ[df_econ['scenario'] == scenario_name]
+
+    # Standardized colors
+    color_map = {"nuclear": "#e74c3c",
+                 "onshore_wind": "#3498db", "solar_pv": "#f1c40f"}
+
+    # 1. Generation Chart
+    fig_gen = px.bar(df_g, x="technology", y="generation_mw", color="technology",
+                     text_auto='.2s', title=f"{title_prefix}: Actual Generation (MW)",
+                     color_discrete_map=color_map)
+    st.plotly_chart(fig_gen, use_container_width=True,
+                    key=f"gen_{scenario_name}")
+
+    # 2. LCOE Chart
+    fig_lcoe = px.bar(df_e, x="technology", y="lcoe_per_mwh", color="technology",
+                      text_auto='.2f', title=f"{title_prefix}: LCOE (€/MWh)",
+                      color_discrete_map=color_map)
+    st.plotly_chart(fig_lcoe, use_container_width=True,
+                    key=f"lcoe_{scenario_name}")
+
+    # 3. EROI Chart
+    fig_eroi = px.bar(df_e, x="technology", y="eroi_baseline", color="technology",
+                      text_auto=True, title=f"{title_prefix}: Energy Return on Investment",
+                      color_discrete_map=color_map)
+    st.plotly_chart(fig_eroi, use_container_width=True,
+                    key=f"eroi_{scenario_name}")
+
+
+# 3. Main Dashboard Layout
 try:
     df_generation, df_economics = load_data()
 
-    # Create two columns for layout
-    col1, col2 = st.columns(2)
+    # Split the screen into two massive columns
+    col_2005, col_2026 = st.columns(2)
 
-    with col1:
-        st.subheader("Economic & Performance Baselines")
-        st.dataframe(df_economics, use_container_width=True)
+    # LEFT SIDE: 2005
+    with col_2005:
+        st.header("⚛️ 2005: Nuclear Peak")
+        st.markdown("*High baseload, highly amortized legacy assets.*")
+        draw_era_metrics('2005_nuclear_peak', df_generation,
+                         df_economics, "2005")
 
-    with col2:
-        st.subheader("Current Generation (MW) by Technology")
-        if not df_generation.empty:
-            # Create a Plotly bar chart
-            fig = px.bar(
-                df_generation,
-                x="technology",
-                y="generation_mw",
-                color="technology",
-                text_auto=True,
-                color_discrete_map={
-                    "nuclear": "#e74c3c",
-                    "onshore_wind": "#3498db",
-                    "solar_pv": "#f1c40f"
-                }
-            )
-            fig.update_layout(xaxis_title="Energy Source",
-                              yaxis_title="Generation (MW)")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Waiting for data pipeline...")
+    # RIGHT SIDE: 2026
+    with col_2026:
+        st.header("🌬️ 2026: Renewable Era")
+        st.markdown("*High installed capacity, highly variable output.*")
+        draw_era_metrics('2026_renewable_era',
+                         df_generation, df_economics, "2026")
 
     # ==========================================
-    # RESTORED: EROI & CAPEX SECTION
+    # PHASE 5: NUCLEAR REVIVAL PROJECTION
     # ==========================================
     st.markdown("---")
-    st.subheader("Advanced Metrics: EROI & Capital Costs")
+    st.subheader("🔮 Financial Projection: Nuclear Revival Costs")
+    st.markdown("Analysis of Capital Expenditure (CAPEX) and Return on Investment (ROI) required to build **21,000 MW** of new nuclear capacity (returning to 2005 levels) under modern economic conditions.")
 
-    col3, col4 = st.columns(2)
+    # Inputs for modern Gen III+ Nuclear
+    modern_nuclear_capex_mw = 10000000
+    target_capacity_mw = 21000
+    market_price_mwh = 80
+    opex_annual_mw = 150000
+    capacity_factor = 0.90
 
-    with col3:
-        if not df_economics.empty:
-            fig_eroi = px.bar(
-                df_economics,
-                x="technology",
-                y="eroi_baseline",
-                color="technology",
-                text_auto=True,
-                title="Energy Return on Investment (EROI)",
-                color_discrete_map={
-                    "nuclear": "#e74c3c",
-                    "onshore_wind": "#3498db",
-                    "solar_pv": "#f1c40f"
-                }
-            )
-            st.plotly_chart(fig_eroi, use_container_width=True)
+    # Math Model
+    total_investment = modern_nuclear_capex_mw * target_capacity_mw
+    annual_generation_mwh = target_capacity_mw * 8760 * capacity_factor
+    annual_revenue = annual_generation_mwh * market_price_mwh
+    annual_opex_total = opex_annual_mw * target_capacity_mw
+    annual_profit = annual_revenue - annual_opex_total
 
-    with col4:
-        if not df_economics.empty:
-            fig_capex = px.bar(
-                df_economics,
-                x="technology",
-                y="capex_per_mw",
-                color="technology",
-                text_auto='.2s',
-                title="Capital Expenditure (CAPEX) per MW (€)",
-                color_discrete_map={
-                    "nuclear": "#e74c3c",
-                    "onshore_wind": "#3498db",
-                    "solar_pv": "#f1c40f"
-                }
-            )
-            st.plotly_chart(fig_capex, use_container_width=True)
+    if annual_profit > 0:
+        payback_years = total_investment / annual_profit
+    else:
+        payback_years = float('inf')
 
-    # ==========================================
-    # PHASE 4: DYNAMIC LCOE CALCULATION
-    # ==========================================
-    st.markdown("---")
-    st.subheader("Dynamic LCOE (Levelized Cost of Energy) Calculation")
+    # Visualization
+    col7, col8, col9 = st.columns(3)
 
-    if not df_economics.empty:
-        # Create a copy for calculations to keep the original dataframe clean
-        df_lcoe = df_economics.copy()
+    with col7:
+        st.metric(label="Required Investment (CAPEX)",
+                  value=f"€ {total_investment / 1e9:,.1f} Billion")
+        st.caption(f"Based on €{modern_nuclear_capex_mw/1e6:,.1f}M per MW")
 
-        # Math Step 1: Total Cost per MW over lifespan (CAPEX + Lifetime OPEX)
-        df_lcoe['total_cost'] = df_lcoe['capex_per_mw'] + \
-            (df_lcoe['opex_annual_per_mw'] * df_lcoe['lifespan_years'])
+    with col8:
+        st.metric(label="Estimated Payback Period",
+                  value=f"{payback_years:,.1f} Years")
+        st.caption(f"At wholesale price of €{market_price_mwh}/MWh")
 
-        # Math Step 2: Total Energy (MWh) per MW over lifespan (8760 hours/year * Capacity Factor * Lifespan)
-        df_lcoe['total_mwh'] = 1 * 8760 * \
-            df_lcoe['capacity_factor'] * df_lcoe['lifespan_years']
+    with col9:
+        st.metric(label="Annual Profit (Pre-Tax)",
+                  value=f"€ {annual_profit / 1e9:,.2f} Billion")
+        st.caption("Revenue minus Operational Expenses (OPEX)")
 
-        # Math Step 3: Final LCOE (€ / MWh)
-        df_lcoe['lcoe_per_mwh'] = df_lcoe['total_cost'] / df_lcoe['total_mwh']
+    st.info("**Engineering Insight:** Building new nuclear units requires colossal upfront capital compared to operating amortized legacy plants. Beyond the massive CAPEX, the long construction cycle (10-15 years per unit) freezes capital without generating power.")
 
-        # Display Results
-        col5, col6 = st.columns(2)
-
-        with col5:
-            st.markdown("**Calculated Financials**")
-            # Select specific columns to show
-            display_df = df_lcoe[['technology',
-                                  'total_cost', 'total_mwh', 'lcoe_per_mwh']]
-            st.dataframe(display_df, use_container_width=True)
-
-        with col6:
-            # Render LCOE Chart
-            fig_lcoe = px.bar(
-                df_lcoe,
-                x="technology",
-                y="lcoe_per_mwh",
-                color="technology",
-                text_auto='.2f',
-                title="Calculated LCOE (€/MWh)",
-                color_discrete_map={
-                    "nuclear": "#e74c3c",
-                    "onshore_wind": "#3498db",
-                    "solar_pv": "#f1c40f"
-                }
-            )
-            st.plotly_chart(fig_lcoe, use_container_width=True)
-
-# The exception handler is now correctly placed at the very end
 except sqlite3.OperationalError:
     st.error(
         "Database not found. Please ensure the pipeline container has run successfully.")
